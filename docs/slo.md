@@ -37,6 +37,11 @@ SLI = 1 - ( sum(rate(http_server_request_duration_seconds_count{service_name="we
 
 Every alert links to the [runbook](runbook.md). Rules live in [`observability/alerts/robot-shop-slo.yaml`](../observability/alerts/robot-shop-slo.yaml) and are unit-tested with `promtool`.
 
+## Validation
+The alert design was tested two ways:
+- **Unit test** with `promtool` (`observability/alerts/tests/slo-alert-test.yaml`): silent under healthy traffic, silent inside the 2-minute grace period, fires on sustained 50% errors.
+- **Live drill** on 2026-10-28 ([log](incident-drill.md#rehearsal-log)): a steady 4 to 5% error rate did **not** page; a catalogue outage (about 40% errors) paged Slack in about **4 minutes** and resolved about 5 minutes after mitigation.
+
 ## Error budget policy
 1. **While budget remains**, the team ships at normal pace.
 2. **When the budget is exhausted** (SLI below 99% over 30 days):
