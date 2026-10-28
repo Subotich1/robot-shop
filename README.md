@@ -40,11 +40,30 @@ Tear down before `terraform destroy`: `./scripts/uninstall.sh`
   `{namespace="robot-shop", service="payment", level="error"}`
 - **A trace:** Jaeger > Service `payment` > Find Traces
 
+## Evidence
+| | |
+|---|---|
+| ![Shop](docs/screenshots/01-robot-shop.png) | ![Pods](docs/screenshots/02-pods-running.png) |
+| Robot Shop live on EKS | All services healthy, load-gen running |
+| ![Dashboard](docs/screenshots/03-dashboard.png) | ![Logs](docs/screenshots/04-logs-by-service-level.png) |
+| Dashboard as code: RED metrics and SLO | Loki: logs by service and level |
+| ![Trace](docs/screenshots/05-trace.png) | ![Slack](docs/screenshots/06-slack-alert.png) |
+| One payment request traced end to end | SLO alert in Slack with runbook link |
+| ![Incident](docs/screenshots/07-incident-502-route.png) | ![Resolved](docs/screenshots/08-slack-resolved.png) |
+| Real incident: 502s on /api/shipping found by route | Alert resolved after mitigation |
+
+### What the trace shows
+A checkout (`POST /pay/<id>`, 464 ms) spends about 70% of its time waiting for the external payment gateway (paypal.com, two redirects), while calls to our own services (user check, cart delete) take under 3 ms. Tracing shows at a glance whether slowness is ours or a third party's.
+
+### A real incident during setup
+About 25 minutes after deploy, `shipping` was starved of CPU by the upstream chart's 200m limit and went NotReady; `web` returned 502 for 7% of requests. The SLO alert fired, a Prometheus query by route found `/api/shipping/codes`, and the fix (more CPU, better probes) is now in the chart. The load generator was also being OOMKilled at 200Mi and was raised to 512Mi. Full write-up: [postmortem](docs/postmortems/2026-10-28-shipping-cpu-starvation.md).
+
 ## SLO and incident response
 - [SLO and error budget policy](docs/slo.md): 99% of requests to `web` succeed over 30 days
 - [Runbook](docs/runbook.md), linked from every alert
 - [Incident drill rehearsal](docs/incident-drill.md)
 - [Blameless postmortem template](docs/postmortem-template.md)
+- [Postmortem: shipping CPU starvation (real incident)](docs/postmortems/2026-10-28-shipping-cpu-starvation.md)
 
 The SLO alert is unit-tested with `promtool` (`observability/alerts/tests/`): it stays quiet under healthy traffic and fires after 2 minutes of sustained errors.
 
