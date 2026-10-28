@@ -49,8 +49,10 @@ Tear down before `terraform destroy`: `./scripts/uninstall.sh`
 | Dashboard as code: RED metrics and SLO | Loki: logs by service and level |
 | ![Trace](docs/screenshots/05-trace.png) | ![Slack](docs/screenshots/06-slack-alert.png) |
 | One payment request traced end to end | SLO alert in Slack with runbook link |
-| ![Incident](docs/screenshots/07-incident-502-route.png) | ![Resolved](docs/screenshots/08-slack-resolved.png) |
-| Real incident: 502s on /api/shipping found by route | Alert resolved after mitigation |
+| ![Incident](docs/screenshots/07-incident-502-route.png) | ![Resolved](docs/screenshots/08-drill-alert-states.png) |
+| Real incident: 502s on /api/shipping found by route | Drill: alert stayed pending at 4-5% errors, fired on the real outage |
+| ![Drill error ratio](docs/screenshots/09-drill-error-ratio.png) | |
+| Drill: 5% background errors, then the catalogue outage | |
 
 ### What the trace shows
 A checkout (`POST /pay/<id>`, 464 ms) spends about 70% of its time waiting for the external payment gateway (paypal.com, two redirects), while calls to our own services (user check, cart delete) take under 3 ms. Tracing shows at a glance whether slowness is ours or a third party's.
