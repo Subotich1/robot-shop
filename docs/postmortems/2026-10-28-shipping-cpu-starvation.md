@@ -8,7 +8,7 @@
 | **Authors** | Peter O. Ajiboye |
 | **Status** | Reviewed |
 | **Severity** | SEV2 (shipping and checkout broken, browsing worked) |
-| **Duration** | Started ~13:05, detected 13:33, mitigated 13:4X, resolved 13:4X (UTC+1) |
+| **Duration** | Started ~13:05, detected 13:33, mitigated 13:39, resolved 13:47 (UTC+1) |
 | **Error budget burned** | Large share of the 30-day budget (7% errors vs 1% allowed while it lasted) |
 
 ## Summary
@@ -29,9 +29,9 @@ About 25 minutes after Robot Shop was deployed, the `shipping` service stopped a
 | 13:34 | Investigation starts. Prometheus query by route: all 5xx are `502` on `//api/shipping/codes` |
 | 13:36 | `kubectl get pods`: `shipping` is `0/1 Running`, 0 restarts, age 41m |
 | 13:37 | Logs and events: thread starvation, then `Readiness probe failed: context deadline exceeded` |
-| 13:4X | **Mitigation:** `kubectl set resources deploy/shipping` to 1 CPU limit, 250m request; new pod ready |
-| 13:4X | Error ratio back under 1%. Slack shows `[RESOLVED]` |
-| 13:5X | Permanent fix committed to the Helm chart |
+| 13:39 | **Mitigation:** `kubectl set resources deploy/shipping` to 1 CPU limit, 250m request; new pod ready |
+| 13:47 | Error ratio back under 1%. Slack shows `[RESOLVED]` |
+| 13:51 | Permanent fix committed to the Helm chart |
 
 ## Detection
 - The SLO alert worked as designed: it fired within about 3 minutes of monitoring coming online and linked to the runbook.
@@ -69,6 +69,7 @@ Contributing factors:
 | Install monitoring before (or together with) the application | detect | Done (install order documented) |
 | Alert on pods NotReady for more than 5 minutes in `robot-shop` | detect | Open |
 | Review CPU and memory limits of the other upstream services under load | prevent | Open |
+| Raise load-gen memory limit from 200Mi to 512Mi (it was OOMKilled under 15 users) | prevent | Done |
 
 ## Evidence
 - `screenshots/` Slack alert, dashboard at 7.16% errors, Prometheus query showing 502 on `//api/shipping/codes`, `kubectl get pods` with shipping `0/1`.
