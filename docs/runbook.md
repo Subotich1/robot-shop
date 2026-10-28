@@ -39,7 +39,7 @@ kubectl -n monitoring port-forward svc/kps-alertmanager 9093:9093   # active ale
 ### 4. Close out
 - Confirm the error ratio is back under 1% and the alert shows **RESOLVED** in Slack.
 - Note the time of detection, mitigation and resolution.
-- Write a [blameless postmortem](postmortem-template.md) if the incident burned more than 20% of the error budget, or if it was the instructor's drill.
+- Write a [blameless postmortem](postmortem-template.md) (example: [shipping CPU starvation](postmortems/2026-10-28-shipping-cpu-starvation.md)) if the incident burned more than 20% of the error budget, or if it was the instructor's drill.
 
 ---
 
