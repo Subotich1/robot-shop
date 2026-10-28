@@ -2,15 +2,8 @@
 # Default is docker/robotshop/image:latest
 image:
   repo: robotshop
-  version: latest
+  version: 2.1.0   # pinned; "latest" is not reproducible
   pullPolicy: IfNotPresent
-
-# EUM configuration
-# Provide your key and set the endpoint
-eum:
-  key: null
-  url: https://eum-eu-west-1.instana.io
-  #url: https://eum-us-west-2.instana.io
 
 # Pod Security Policy
 psp:
@@ -55,7 +48,7 @@ ratings: {}
 
 redis:
   # Storage class to use with redis statefulset.
-  storageClassName: standard
+  storageClassName: ebs-csi-default-sc   # EBS gp3 default class from the Capstone 1 cluster
 
 shipping: {}
 

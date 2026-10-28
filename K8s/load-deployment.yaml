@@ -23,9 +23,10 @@ spec:
             value: "15"
           - name: SILENT
             value: "1"
+          # "0" = steady, healthy traffic. Set to "1" to inject payment errors (incident drill).
           - name: ERROR
-            value: "1"
-        image: robotshop/rs-load:latest
+            value: "0"
+        image: robotshop/rs-load:2.1.0
         resources:
           limits:
             cpu: 200m

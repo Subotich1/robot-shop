@@ -1,0 +1,49 @@
+# OpenTelemetry Collector: receives traces over OTLP, batches them, forwards to Jaeger.
+mode: deployment
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+# Only the OTLP ports are needed
+ports:
+  jaeger-compact: { enabled: false }
+  jaeger-thrift: { enabled: false }
+  jaeger-grpc: { enabled: false }
+  zipkin: { enabled: false }
+
+config:
+  receivers:
+    jaeger: null
+    zipkin: null
+    prometheus: null
+    otlp:
+      protocols:
+        grpc:
+          endpoint: ${env:MY_POD_IP}:4317
+        http:
+          endpoint: ${env:MY_POD_IP}:4318
+  processors:
+    memory_limiter:
+      check_interval: 1s
+      limit_percentage: 75
+      spike_limit_percentage: 15
+    batch: {}
+  exporters:
+    otlp_grpc/jaeger:
+      endpoint: jaeger.monitoring.svc.cluster.local:4317
+      tls:
+        insecure: true
+    debug:
+      verbosity: basic
+  service:
+    pipelines:
+      logs: null
+      metrics: null
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: [otlp_grpc/jaeger, debug]
+
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 512Mi }

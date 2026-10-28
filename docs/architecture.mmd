@@ -1,0 +1,27 @@
+flowchart LR
+  user([Shopper / load-gen]) --> lb[[AWS ELB]] --> web
+
+  subgraph rs["namespace: robot-shop"]
+    web[web<br/>nginx] --> catalogue[catalogue] & cart[cart] & payment[payment] & user_svc[user] & shipping[shipping] & ratings[ratings]
+    catalogue --> mongo[(MongoDB)]
+    user_svc --> mongo
+    cart --> redis[(Redis)]
+    shipping --> mysql[(MySQL)]
+    ratings --> mysql
+    payment --> rabbit[(RabbitMQ)] --> dispatch[dispatch]
+  end
+
+  subgraph mon["namespace: monitoring"]
+    beyla[Beyla eBPF<br/>DaemonSet] -->|RED metrics| prom[Prometheus]
+    beyla -->|payment traces OTLP| otel[OTel Collector] --> jaeger[Jaeger]
+    fb[Fluent Bit<br/>DaemonSet] -->|logs + level label| loki[Loki]
+    prom -->|SLO rules| am[Alertmanager]
+    grafana[Grafana<br/>dashboard as code]
+    prom --> grafana
+    loki --> grafana
+    jaeger --> grafana
+  end
+
+  rs -. observed by .-> beyla
+  rs -. container logs .-> fb
+  am -->|alert + runbook link| slack([Slack])

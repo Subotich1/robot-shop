@@ -1,0 +1,29 @@
+# Unit test for the SLO alert. Run with:
+#   python3 -c "import yaml;yaml.safe_dump(yaml.safe_load(open('observability/alerts/robot-shop-slo.yaml'))['spec'],open('/tmp/rules.yaml','w'))"
+#   cp observability/alerts/tests/slo-alert-test.yaml /tmp/ && cd /tmp && promtool test rules slo-alert-test.yaml
+rule_files: [rules.yaml]
+evaluation_interval: 30s
+tests:
+  - interval: 30s
+    input_series:
+      # 10 requests/s to web: healthy for 10 minutes, then half of them fail
+      - series: 'http_server_request_duration_seconds_count{service_name="web",http_response_status_code="200"}'
+        values: '0+300x40'
+      - series: 'http_server_request_duration_seconds_count{service_name="web",http_response_status_code="500"}'
+        values: '0+0x20 0+300x20'
+    alert_rule_test:
+      - eval_time: 9m       # healthy: no alert
+        alertname: RobotShopAvailabilitySLOBurn
+        exp_alerts: []
+      - eval_time: 12m      # errors started 2m ago, still inside the "for: 2m" window
+        alertname: RobotShopAvailabilitySLOBurn
+        exp_alerts: []
+      - eval_time: 18m      # sustained 50% errors: alert fires
+        alertname: RobotShopAvailabilitySLOBurn
+        exp_alerts:
+          - exp_labels: { severity: critical, team: robot-shop, slo: availability-99 }
+            exp_annotations:
+              summary: "Robot Shop is failing 50% of requests (SLO allows 1%)"
+              description: "More than 5% of requests to web returned 5xx for 2+ minutes. Error budget is burning at least 5x faster than allowed."
+              runbook_url: "https://github.com/Subotich1/robot-shop/blob/master/docs/runbook.md#robotshopavailabilityslo-burn"
+              dashboard: "Grafana > Dashboards > Robot Shop: Requests, Errors, Latency"

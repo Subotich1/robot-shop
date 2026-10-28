@@ -1,0 +1,31 @@
+# Grafana Beyla: eBPF auto-instrumentation. Produces request rate, error and latency (RED)
+# metrics for Robot Shop services without changing their code, and traces for payment.
+preset: application
+
+service:
+  enabled: true        # exposes the /metrics endpoint
+serviceMonitor:
+  enabled: true        # Prometheus scrapes it automatically
+
+config:
+  data:
+    attributes:
+      kubernetes:
+        enable: true
+    routes:
+      unmatched: heuristic   # groups /api/cart/add/123/... style paths to keep label cardinality low
+    discovery:
+      instrument:
+        # Metrics for the four focus services
+        - k8s_namespace: robot-shop
+          k8s_deployment_name: "{web,catalogue,cart,payment}"
+          exports: [metrics]
+        # Traces only for payment (the brief asks for tracing on one service)
+        - k8s_namespace: robot-shop
+          k8s_deployment_name: payment
+          exports: [metrics, traces]
+    prometheus_export:
+      port: 9090
+      path: /metrics
+    otel_traces_export:
+      endpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318

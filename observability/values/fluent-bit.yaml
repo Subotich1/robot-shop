@@ -1,0 +1,73 @@
+# Fluent Bit DaemonSet: tails Robot Shop container logs, adds Kubernetes metadata,
+# tags every line with a log level, and ships to Loki.
+# Loki labels: namespace, service, pod, container, level
+
+config:
+  inputs: |
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*_robot-shop_*.log
+        multiline.parser  docker, cri
+        Tag               kube.*
+        Mem_Buf_Limit     5MB
+        Skip_Long_Lines   On
+
+  filters: |
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Merge_Log           On
+        Keep_Log            On
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude On
+        Labels              On
+        Annotations         Off
+
+    [FILTER]
+        Name    lua
+        Match   kube.*
+        script  /fluent-bit/scripts/level.lua
+        call    set_level
+
+  outputs: |
+    [OUTPUT]
+        Name        loki
+        Match       kube.*
+        Host        loki.monitoring.svc.cluster.local
+        Port        3100
+        labels      job=fluent-bit, namespace=$kubernetes['namespace_name'], service=$kubernetes['labels']['service'], pod=$kubernetes['pod_name'], container=$kubernetes['container_name'], level=$level
+        remove_keys kubernetes, stream, _p
+        line_format json
+        Retry_Limit 5
+
+luaScripts:
+  level.lua: |
+    -- Normalise a log level for every record so logs can be filtered by level in Loki.
+    -- Uses a structured "level" field when the app logs JSON, otherwise looks for keywords.
+    local function normalise(v)
+      v = string.lower(tostring(v))
+      if v:find("^err") or v:find("fatal") or v:find("crit") or v:find("panic") then return "error" end
+      if v:find("^warn") then return "warn" end
+      if v:find("^debug") or v:find("^trace") then return "debug" end
+      return "info"
+    end
+
+    function set_level(tag, ts, record)
+      local lvl = record["level"] or record["severity"] or record["levelname"]
+      local level = "info"
+      if type(lvl) == "number" then
+        -- pino (Node.js) numeric levels: 50+ error, 40 warn, 20 and below debug
+        if lvl >= 50 then level = "error" elseif lvl >= 40 then level = "warn" elseif lvl <= 20 then level = "debug" end
+      elseif lvl ~= nil then
+        level = normalise(lvl)
+      else
+        local text = string.lower(tostring(record["log"] or record["msg"] or record["message"] or ""))
+        if text:find("error") or text:find("exception") or text:find("traceback") or text:find("\" 5%d%d ") then
+          level = "error"
+        elseif text:find("warn") then
+          level = "warn"
+        end
+      end
+      record["level"] = level
+      return 2, ts, record
+    end

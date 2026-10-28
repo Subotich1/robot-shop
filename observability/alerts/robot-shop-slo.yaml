@@ -1,0 +1,102 @@
+# Robot Shop availability SLO: 99% of requests to the shop front end (web) succeed over 30 days.
+# SLI  = non-5xx responses / all responses, measured at web (every user request passes through it).
+# Error budget = 1% of requests.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: robot-shop-slo
+  namespace: monitoring
+spec:
+  groups:
+    - name: robot-shop-sli
+      interval: 30s
+      rules:
+        # Error ratio of the web front end over several windows
+        - record: robotshop:web_error_ratio:rate5m
+          expr: |
+            sum(rate(http_server_request_duration_seconds_count{service_name="web", http_response_status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_server_request_duration_seconds_count{service_name="web"}[5m]))
+        - record: robotshop:web_error_ratio:rate30m
+          expr: |
+            sum(rate(http_server_request_duration_seconds_count{service_name="web", http_response_status_code=~"5.."}[30m]))
+            /
+            sum(rate(http_server_request_duration_seconds_count{service_name="web"}[30m]))
+        - record: robotshop:web_error_ratio:rate1h
+          expr: |
+            sum(rate(http_server_request_duration_seconds_count{service_name="web", http_response_status_code=~"5.."}[1h]))
+            /
+            sum(rate(http_server_request_duration_seconds_count{service_name="web"}[1h]))
+        - record: robotshop:web_error_ratio:rate6h
+          expr: |
+            sum(rate(http_server_request_duration_seconds_count{service_name="web", http_response_status_code=~"5.."}[6h]))
+            /
+            sum(rate(http_server_request_duration_seconds_count{service_name="web"}[6h]))
+        # Per-service error ratio, used by the dashboard
+        - record: robotshop:service_error_ratio:rate5m
+          expr: |
+            sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~"web|catalogue|cart|payment", http_response_status_code=~"5.."}[5m]))
+            /
+            sum by (service_name) (rate(http_server_request_duration_seconds_count{service_name=~"web|catalogue|cart|payment"}[5m]))
+
+    - name: robot-shop-slo-alerts
+      rules:
+        # Main alert (sent to Slack). Fires when the shop burns error budget 5x faster
+        # than the SLO allows (5% errors vs 1% budget) for 2 minutes.
+        - alert: RobotShopAvailabilitySLOBurn
+          expr: robotshop:web_error_ratio:rate5m > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            team: robot-shop
+            slo: availability-99
+          annotations:
+            summary: "Robot Shop is failing {{ $value | humanizePercentage }} of requests (SLO allows 1%)"
+            description: "More than 5% of requests to web returned 5xx for 2+ minutes. Error budget is burning at least 5x faster than allowed."
+            runbook_url: "https://github.com/Subotich1/robot-shop/blob/master/docs/runbook.md#robotshopavailabilityslo-burn"
+            dashboard: "Grafana > Dashboards > Robot Shop: Requests, Errors, Latency"
+
+        # Optional stretch: multi-window burn-rate alerts (Google SRE workbook)
+        - alert: RobotShopErrorBudgetFastBurn
+          expr: |
+            robotshop:web_error_ratio:rate1h > (14.4 * 0.01)
+            and
+            robotshop:web_error_ratio:rate5m > (14.4 * 0.01)
+          for: 2m
+          labels:
+            severity: critical
+            team: robot-shop
+            slo: availability-99
+          annotations:
+            summary: "Fast error budget burn: 2% of the monthly budget gone in 1 hour"
+            description: "1h and 5m error ratios are both above 14.4x the allowed rate."
+            runbook_url: "https://github.com/Subotich1/robot-shop/blob/master/docs/runbook.md#robotshopavailabilityslo-burn"
+            dashboard: "Grafana > Dashboards > Robot Shop: Requests, Errors, Latency"
+        - alert: RobotShopErrorBudgetSlowBurn
+          expr: |
+            robotshop:web_error_ratio:rate6h > (6 * 0.01)
+            and
+            robotshop:web_error_ratio:rate30m > (6 * 0.01)
+          for: 15m
+          labels:
+            severity: warning
+            team: robot-shop
+            slo: availability-99
+          annotations:
+            summary: "Slow error budget burn: 5% of the monthly budget gone in 6 hours"
+            description: "6h and 30m error ratios are both above 6x the allowed rate."
+            runbook_url: "https://github.com/Subotich1/robot-shop/blob/master/docs/runbook.md#robotshopavailabilityslo-burn"
+            dashboard: "Grafana > Dashboards > Robot Shop: Requests, Errors, Latency"
+
+        # Safety net: no traffic data at all (Beyla or Prometheus broken, or shop down)
+        - alert: RobotShopNoTraffic
+          expr: absent(rate(http_server_request_duration_seconds_count{service_name="web"}[5m])) or sum(rate(http_server_request_duration_seconds_count{service_name="web"}[5m])) == 0
+          for: 5m
+          labels:
+            severity: warning
+            team: robot-shop
+          annotations:
+            summary: "No requests seen at Robot Shop web for 5 minutes"
+            description: "Either the shop is down, load-gen stopped, or metrics collection is broken."
+            runbook_url: "https://github.com/Subotich1/robot-shop/blob/master/docs/runbook.md#robotshopnotraffic"
+            dashboard: "Grafana > Dashboards > Robot Shop: Requests, Errors, Latency"
